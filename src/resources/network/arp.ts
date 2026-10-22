@@ -185,11 +185,12 @@ export class ArpTableResource {
    */
   async findOnVlan(vlanTag: string): Promise<ArpEntry[]> {
     const entries = await this.list();
-    const vlanInterfaces = [`vlan${vlanTag}`, `igc2_vlan${vlanTag}`, `igc3_vlan${vlanTag}`];
-    
-    return entries.filter(entry => 
-      vlanInterfaces.some(iface => entry.interface.includes(iface))
-    );
+    // Fork: OPNsense names VLAN devices vlan070 or vlan0.100 (older: vlan70, igc2_vlan70).
+    // Match the whole name, so tag 1 doesn't match vlan010.
+    const tag = String(vlanTag).replace(/\D/g, '');
+    const vlanDevice = new RegExp(`^(\\w+_)?vlan0?\\.?${tag}$`);
+
+    return entries.filter(entry => vlanDevice.test(entry.interface));
   }
 
   /**

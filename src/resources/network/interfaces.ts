@@ -36,6 +36,11 @@ export interface InterfaceOverview {
   ipaddr6?: string;
   subnet6?: string;
   gateway6?: string;
+  // Fork: fields of interfaces/overview/interfaces_info rows.
+  identifier?: string;
+  description?: string;
+  ipv4?: { ipaddr: string }[];
+  ipv6?: { ipaddr: string }[];
   media?: string;
   statistics?: {
     packets_in: number;

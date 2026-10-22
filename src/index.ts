@@ -4568,8 +4568,12 @@ class OPNSenseMCPServer {
             const formatted = interfaces.map(iface => {
               const ipv4 = iface.ipaddr ? `${iface.ipaddr}/${iface.subnet || ''}` : null;
               const ipv6 = iface.ipaddr6 ? `${iface.ipaddr6}/${iface.subnet6 || ''}` : null;
-              const addrs = [ipv4, ipv6].filter(Boolean).join(', ') || 'no IP';
-              return `${iface.name}: ${iface.device} - ${iface.status} (${addrs})`;
+              // Fork: interfaces_info lists addresses as ipv4/ipv6 arrays of { ipaddr: 'a/bits' }.
+              const listed = (v: any) => Array.isArray(v) ? v.map((a: any) => a?.ipaddr) : [];
+              const addrs = [ipv4, ipv6, ...listed(iface.ipv4), ...listed(iface.ipv6)]
+                .filter(Boolean).join(', ') || 'no IP';
+              const name = iface.name ?? (iface.identifier ? `${iface.description} (${iface.identifier})` : iface.description);
+              return `${name}: ${iface.device} - ${iface.status} (${addrs})`;
             });
             
             return {
