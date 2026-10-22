@@ -1,45 +1,21 @@
-# OPNSense MCP Server - SSE Deployment
-FROM node:20-alpine
-
-# Install build dependencies
-RUN apk add --no-cache python3 make g++
-
-# Create app directory
+# Fork: build with bun (the lockfile is bun.lock), run with Node.
+FROM oven/bun:1.4 AS build
 WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --only=production
-
-# Copy TypeScript config and source
-COPY tsconfig.json ./
+COPY package.json bun.lock tsconfig.json ./
+RUN bun install --frozen-lockfile --ignore-scripts
 COPY src ./src
+RUN bun run build \
+ && rm -rf node_modules \
+ && bun install --frozen-lockfile --production --ignore-scripts
 
-# Build the application
-RUN npm run build
-
-# Remove dev dependencies and build tools
-RUN npm prune --production && \
-    apk del python3 make g++
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-# Change ownership
-RUN chown -R nodejs:nodejs /app
-
-# Switch to non-root user
-USER nodejs
-
-# Expose SSE port
+FROM node:24-slim
+WORKDIR /app
+COPY --from=build /app/package.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+ENV NODE_ENV=production MCP_TRANSPORT=streamable-http MCP_SSE_PORT=3000
+USER node
 EXPOSE 3000
-
-# Health check endpoint
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); })"
-
-# Default to SSE transport
-CMD ["node", "dist/index.js", "--transport", "sse", "--port", "3000"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:3000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+CMD ["node", "dist/index.js"]

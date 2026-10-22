@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { TransportOptions } from "./types.js";
 import { logger } from "../utils/logger.js";
+import { accessJwtCheck } from "./access.js";
 
 interface SSEConnection {
   transport: SSEServerTransport;
@@ -21,6 +22,9 @@ export class SSETransportServer {
   private onConnectionCallback:
     | ((transport: Transport) => Promise<void>)
     | null = null;
+  // Fork: Cloudflare Access JWT check, and stateless Streamable HTTP (MCP_STATELESS=true).
+  private accessCheck = accessJwtCheck();
+  private stateless = process.env.MCP_STATELESS === "true";
 
   constructor(options: TransportOptions = {}) {
     this.port = options.port || 3000;
@@ -51,6 +55,16 @@ export class SSETransportServer {
         }
 
         const url = new URL(req.url || "/", `http://${req.headers.host}`);
+
+        if (
+          url.pathname !== "/health" &&
+          this.accessCheck &&
+          !(await this.accessCheck(req))
+        ) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "forbidden" }));
+          return;
+        }
 
         // Handle Streamable HTTP endpoint (MCP 2025-03-26 spec)
         if (url.pathname === "/mcp") {
@@ -130,7 +144,10 @@ export class SSETransportServer {
           // would still be undefined here). Use the SDK's dedicated
           // lifecycle hooks instead, which fire at the correct moments.
           transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: () => crypto.randomUUID(),
+            sessionIdGenerator: this.stateless
+              ? undefined
+              : () => crypto.randomUUID(),
+            enableJsonResponse: this.stateless,
             onsessioninitialized: (newSessionId) => {
               this.streamableTransports.set(newSessionId, transport);
               logger.info(
@@ -149,9 +166,14 @@ export class SSETransportServer {
           if (this.onConnectionCallback) {
             await this.onConnectionCallback(transport);
           }
+          if (this.stateless) res.on("close", () => transport.close());
         }
 
         await transport.handleRequest(req, res, jsonBody);
+      } else if (this.stateless) {
+        // Stateless: no server-initiated stream and no session to delete.
+        res.writeHead(405, { "Content-Type": "application/json", Allow: "POST" });
+        res.end(JSON.stringify({ error: "Method not allowed" }));
       } else if (req.method === "GET") {
         // SSE stream for server-initiated notifications
         if (sessionId && this.streamableTransports.has(sessionId)) {

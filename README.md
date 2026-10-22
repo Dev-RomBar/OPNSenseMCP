@@ -10,6 +10,14 @@
 >   patterns can be bypassed with shell syntax (`cat x; reboot`). The `ssh_*` and CLI
 >   tools always fail.
 >
+> - `configure` is hidden: the connection comes from the environment only. Every tool is
+>   annotated `readOnlyHint`.
+> - HTTP transports check the Cloudflare Access JWT (`Cf-Access-Jwt-Assertion`, with
+>   `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD`). They refuse to start without those
+>   settings unless `ALLOW_WITHOUT_ACCESS_JWT=true`. `/health` stays open.
+> - `MCP_STATELESS=true` serves `/mcp` statelessly (JSON responses, no sessions).
+> - The `Dockerfile` builds with bun and runs `streamable-http` on port 3000.
+>
 > Sync with upstream: `git fetch upstream && git merge upstream/main`, then check that
 > `src/index.ts` (`getSafetyConfig`), `src/api/client.ts` (`readOnly`, `post`) and
 > `src/resources/ssh/executor.ts` (`execute`) still carry the `Fork:` changes.

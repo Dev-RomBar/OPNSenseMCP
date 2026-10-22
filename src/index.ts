@@ -118,6 +118,9 @@ function getSafetyConfig(): { dryRun: boolean; readOnly: boolean } {
  * needed to reach a working state in the first place.
  */
 const WRITE_TOOL_NAMES = new Set<string>([
+  // Fork: hidden too. It would let the model point the shared client at any host
+  // with any credentials. The environment configures the connection instead.
+  'configure',
   'create_vlan', 'update_vlan', 'delete_vlan',
   'create_firewall_rule', 'create_firewall_preset', 'update_firewall_rule',
   'delete_firewall_rule', 'toggle_firewall_rule', 'toggle_firewall_rule_log',
@@ -2451,9 +2454,14 @@ class OPNSenseMCPServer {
       // enforcement is in OPNSenseAPIClient/SSHExecutor (they reject/simulate
       // mutations regardless of which tool called them), but not exposing the
       // tool at all is a stronger guarantee than trusting every call site.
-      const tools = getSafetyConfig().readOnly
+      const tools = (getSafetyConfig().readOnly
         ? allTools.filter(t => !WRITE_TOOL_NAMES.has(t.name))
-        : allTools;
+        : allTools
+      ).map(t => ({
+        ...t,
+        // Fork: every remaining tool only reads (writes and SSH are blocked).
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+      }));
 
       return { tools };
     });
