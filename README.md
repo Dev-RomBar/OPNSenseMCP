@@ -1,5 +1,22 @@
 # OPNsense MCP Server
 
+> **Read-only fork** of [vespo92/OPNSenseMCP](https://github.com/vespo92/OPNSenseMCP).
+> It can never change the firewall:
+>
+> - `OPNSENSE_READ_ONLY` is always on, whatever the environment or the `configure` tool
+>   says. Write tools are hidden, and the API client never sends POST, PUT or DELETE.
+> - `search*` endpoints are sent as GET, so the list tools keep working.
+> - SSH is disabled. No command is ever sent, because upstream's read-only command
+>   patterns can be bypassed with shell syntax (`cat x; reboot`). The `ssh_*` and CLI
+>   tools always fail.
+>
+> Sync with upstream: `git fetch upstream && git merge upstream/main`, then check that
+> `src/index.ts` (`getSafetyConfig`), `src/api/client.ts` (`readOnly`, `post`) and
+> `src/resources/ssh/executor.ts` (`execute`) still carry the `Fork:` changes.
+> Give the server an OPNsense API key with the narrowest privileges you can, as a second
+> safeguard.
+
+
 [![npm version](https://badge.fury.io/js/opnsense-mcp-server.svg)](https://www.npmjs.com/package/opnsense-mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 

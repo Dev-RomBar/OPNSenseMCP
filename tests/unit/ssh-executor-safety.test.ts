@@ -1,5 +1,5 @@
 /**
- * Unit tests for SSHExecutor's dry-run / read-only safety gating.
+ * Unit tests for SSHExecutor: this fork disables SSH entirely.
  *
  * The SSH executor is a separate blast-radius surface from the OPNsense API
  * client: it runs whitelisted shell commands (including `rm`, `pfctl`,
@@ -48,122 +48,22 @@ afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
 });
 
-describe('SSHExecutor read-only mode', () => {
-  it('blocks a mutating command without opening an SSH connection', async () => {
-    process.env.OPNSENSE_READ_ONLY = 'true';
+describe('SSHExecutor fork: SSH disabled', () => {
+  it.each([
+    'pfctl -d',
+    'rm -rf /conf',
+    'cat /conf/config.xml; reboot',
+    'pfctl -s rules',
+    'xmllint --noout /conf/config.xml',
+  ])('never sends %s, whatever the safety mode', async (command) => {
     const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
     const executor = new SSHExecutor();
+    const connect = vi.spyOn(executor as any, 'connect');
 
-    const result = await executor.execute('pfctl -d'); // disables the firewall — must never run
+    const result = await executor.execute(command);
 
     expect(result.success).toBe(false);
-    expect(result.stderr).toMatch(/read-only mode/i);
-    expect(result.exitCode).toBe(1);
-  });
-
-  it('blocks rm even though it is on the base command whitelist', async () => {
-    process.env.OPNSENSE_READ_ONLY = 'true';
-    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
-    const executor = new SSHExecutor();
-
-    const result = await executor.execute('rm /conf/config.xml');
-
-    expect(result.success).toBe(false);
-    expect(result.stderr).toMatch(/read-only mode/i);
-  });
-
-  it('still allows a known read-only diagnostic command through', async () => {
-    process.env.OPNSENSE_READ_ONLY = 'true';
-    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
-    const executor = new SSHExecutor();
-
-    const result = await executor.execute('netstat -rn');
-
-    expect(result.success).toBe(true);
-    expect(result.exitCode).toBe(0);
-  });
-});
-
-describe('SSHExecutor dry-run mode', () => {
-  it('simulates a mutating command instead of running it', async () => {
-    process.env.OPNSENSE_DRY_RUN = 'true';
-    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
-    const executor = new SSHExecutor();
-
-    const result = await executor.execute('configctl filter reload');
-
-    expect(result.success).toBe(true); // simulated success, not a real failure
-    expect(result.stdout).toMatch(/DRY RUN/);
-    expect(result.stdout).toContain('configctl filter reload');
-  });
-
-  it('still allows a known read-only diagnostic command through', async () => {
-    process.env.OPNSENSE_DRY_RUN = 'true';
-    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
-    const executor = new SSHExecutor();
-
-    const result = await executor.execute('pfctl -s rules');
-
-    expect(result.success).toBe(true);
-    expect(result.stdout).toBe('ok'); // came from the fake SSH stream, i.e. it really "ran"
-  });
-});
-
-describe('SSHExecutor xmllint whitelisting (issue #96)', () => {
-  it('accepts the xmllint validation step used by the NAT save path', async () => {
-    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
-    const executor = new SSHExecutor();
-
-    // saveNATConfigViaSSH() runs this with stopOnError: true. While xmllint was
-    // missing from the whitelist the batch aborted here, so every
-    // nat_create_port_forward call failed with "Command not in whitelist".
-    const result = await executor.execute('xmllint --noout /tmp/config_nat_123.xml');
-
-    expect(result.stderr).not.toMatch(/not in whitelist/i);
-  });
-
-  it('treats xmllint --noout as read-only, so it survives read-only mode', async () => {
-    process.env.OPNSENSE_READ_ONLY = 'true';
-    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
-    const executor = new SSHExecutor();
-
-    const result = await executor.execute('xmllint --noout /tmp/config_nat_123.xml');
-
-    expect(result.success).toBe(true);
-    expect(result.stderr).not.toMatch(/read-only mode/i);
-  });
-
-  it('does not treat the writing form of xmllint as read-only', async () => {
-    process.env.OPNSENSE_READ_ONLY = 'true';
-    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
-    const executor = new SSHExecutor();
-
-    // --output writes a file, so read-only mode must still block it.
-    const result = await executor.execute('xmllint --output /conf/config.xml /tmp/x.xml');
-
-    expect(result.success).toBe(false);
-    expect(result.stderr).toMatch(/read-only mode/i);
-  });
-});
-
-describe('SSHExecutor normal mode (regression)', () => {
-  it('runs a whitelisted mutating command as before', async () => {
-    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
-    const executor = new SSHExecutor();
-
-    const result = await executor.execute('configctl filter reload');
-
-    expect(result.success).toBe(true);
-    expect(result.stdout).toBe('ok');
-  });
-
-  it('still rejects a command outside the base whitelist', async () => {
-    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
-    const executor = new SSHExecutor();
-
-    const result = await executor.execute('shutdown -r now');
-
-    expect(result.success).toBe(false);
-    expect(result.stderr).toMatch(/not in whitelist/i);
+    expect(result.stderr).toMatch(/SSH is disabled/i);
+    expect(connect).not.toHaveBeenCalled();
   });
 });

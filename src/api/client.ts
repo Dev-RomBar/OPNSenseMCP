@@ -56,7 +56,8 @@ export class OPNSenseAPIClient {
   }) {
     this.debugMode = config.debugMode || false;
     this.dryRun = config.dryRun || false;
-    this.readOnly = config.readOnly || false;
+    // Fork: always read-only. POST/PUT/DELETE are never sent, whatever the caller passes.
+    this.readOnly = true;
 
     // Optional mTLS client certificate, for OPNsense instances that require
     // client-cert auth on top of (or instead of) the API key/secret.
@@ -316,6 +317,17 @@ export class OPNSenseAPIClient {
    * POST request - WITH Content-Type header
    */
   async post<T = any>(path: string, data: any = {}): Promise<T> {
+    // Fork: OPNsense search* endpoints also answer GET, so send them as GET to keep the
+    // list tools working in read-only mode. Nested values (sort) are dropped.
+    if (/\/search[A-Z]\w*$/.test(path)) {
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(data ?? {})) {
+        if (value !== null && typeof value !== 'object') query.set(key, String(value));
+      }
+      const qs = query.toString();
+      return this.get<T>(qs ? `${path}?${qs}` : path);
+    }
+
     const guarded = this.guardMutation('POST', path, data);
     if (guarded) return guarded as unknown as T;
 

@@ -300,6 +300,18 @@ export class SSHExecutor extends EventEmitter {
    * Execute a single command via SSH
    */
   async execute(command: string, options?: { timeout?: number; sudo?: boolean }): Promise<CommandResult> {
+    // Fork: SSH is disabled. The read-only command patterns below can be bypassed with
+    // shell syntax (`cat x; reboot`), so no command is ever sent.
+    return {
+      success: false,
+      stdout: '',
+      stderr: 'Blocked: SSH is disabled in this read-only fork; this command was not sent.',
+      exitCode: 1,
+      duration: 0,
+      command,
+      timestamp: new Date().toISOString()
+    };
+
     // Update last activity
     this.lastActivity = Date.now();
     

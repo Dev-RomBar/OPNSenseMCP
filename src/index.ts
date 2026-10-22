@@ -99,8 +99,9 @@ const ConfigSchema = z.object({
  */
 function getSafetyConfig(): { dryRun: boolean; readOnly: boolean } {
   return {
-    dryRun: process.env.OPNSENSE_DRY_RUN === 'true',
-    readOnly: process.env.OPNSENSE_READ_ONLY === 'true'
+    // Fork: always read-only, whatever the environment says.
+    dryRun: false,
+    readOnly: true
   };
 }
 
