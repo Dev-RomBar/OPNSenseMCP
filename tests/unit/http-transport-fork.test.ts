@@ -2,6 +2,7 @@
  * Fork: Cloudflare Access JWT check and stateless Streamable HTTP on /mcp.
  */
 import { describe, it, expect, afterEach } from 'vitest';
+import { connect } from 'net';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { accessJwtCheck } from '../../src/transports/access.js';
 import { SSETransportServer } from '../../src/transports/SSETransportServer.js';
@@ -84,5 +85,23 @@ describe('SSETransportServer stateless mode', () => {
   it('answers GET /mcp with 405', async () => {
     const base = await start(env);
     expect((await fetch(`${base}/mcp`)).status).toBe(405);
+  });
+});
+
+describe('SSETransportServer request parsing', () => {
+  it('survives an invalid Host header', async () => {
+    const base = await start({ ALLOW_WITHOUT_ACCESS_JWT: 'true' });
+    const port = Number(new URL(base).port);
+    const status = await new Promise<string>((resolve, reject) => {
+      const socket = connect(port, '127.0.0.1', () => {
+        socket.end('GET /health HTTP/1.1\r\nHost: [\r\nConnection: close\r\n\r\n');
+      });
+      let data = '';
+      socket.on('data', (chunk) => (data += chunk));
+      socket.on('end', () => resolve(data.split('\r\n')[0]));
+      socket.on('error', reject);
+    });
+    expect(status).toMatch(/^HTTP\/1\.1 (200|400)/);
+    expect((await fetch(`${base}/health`)).status).toBe(200);
   });
 });

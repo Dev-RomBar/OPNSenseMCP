@@ -54,7 +54,8 @@ export class SSETransportServer {
           return;
         }
 
-        const url = new URL(req.url || "/", `http://${req.headers.host}`);
+        // Fork: don't parse the client's Host header (an invalid one would throw here).
+        const url = new URL(req.url || "/", "http://localhost");
 
         if (
           url.pathname !== "/health" &&

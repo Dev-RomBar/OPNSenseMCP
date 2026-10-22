@@ -106,6 +106,15 @@ function getSafetyConfig(): { dryRun: boolean; readOnly: boolean } {
 }
 
 /**
+ * Fork: also hidden. SSH and CLI tools always fail (SSH is disabled), macro tools write
+ * local files, and the backup tools are stubs or read the full configuration.
+ */
+function isForkHiddenTool(name: string): boolean {
+  return WRITE_TOOL_NAMES.has(name) || /^(ssh|cli|macro)_/.test(name) ||
+    name === 'create_backup' || name === 'list_backups';
+}
+
+/**
  * Tools that mutate router state (create/update/delete/toggle/apply/restore/
  * enable/fix-style operations), used to hide them from ListTools and hard-block
  * them in CallTool when OPNSENSE_READ_ONLY=true. Deliberately excludes
@@ -2455,7 +2464,7 @@ class OPNSenseMCPServer {
       // mutations regardless of which tool called them), but not exposing the
       // tool at all is a stronger guarantee than trusting every call site.
       const tools = (getSafetyConfig().readOnly
-        ? allTools.filter(t => !WRITE_TOOL_NAMES.has(t.name))
+        ? allTools.filter(t => !isForkHiddenTool(t.name))
         : allTools
       ).map(t => ({
         ...t,
@@ -2757,7 +2766,7 @@ class OPNSenseMCPServer {
       // calls to a write tool by name even if a client cached an older tool
       // list. The API client / SSH executor would reject the mutation anyway,
       // but failing here is faster and gives a clearer error.
-      if (getSafetyConfig().readOnly && WRITE_TOOL_NAMES.has(name)) {
+      if (getSafetyConfig().readOnly && isForkHiddenTool(name)) {
         throw new McpError(
           ErrorCode.InvalidRequest,
           `Tool '${name}' is unavailable: server is running in read-only mode (OPNSENSE_READ_ONLY=true).`
@@ -2873,6 +2882,14 @@ class OPNSenseMCPServer {
         case 'test_connection': {
           await this.ensureInitialized();
           const status = await this.client!.testConnection();
+          // Fork: a least-privilege key can't read the firmware probe (403) but did
+          // authenticate, as at startup (isProbeDeniedByPrivilege).
+          if (isProbeDeniedByPrivilege(status)) {
+            Object.assign(status, {
+              success: true,
+              note: 'Authenticated; this key may not read firmware info (least privilege).'
+            });
+          }
           return {
             content: [{
               type: 'text',

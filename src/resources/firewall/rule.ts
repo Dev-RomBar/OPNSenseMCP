@@ -103,6 +103,9 @@ export class FirewallRuleResource {
         logger.info('Returning cached rules due to API error');
         return Array.from(this.rulesCache.values());
       }
+
+      // Fork: an unreadable firewall is not one without rules.
+      throw error;
     }
 
     return [];
