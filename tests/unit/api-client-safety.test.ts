@@ -27,7 +27,7 @@ vi.mock('axios', () => ({
   },
 }));
 
-import { OPNSenseAPIClient, OPNSenseAPIError } from '../../src/api/client.js';
+import { OPNSenseAPIClient, OPNSenseAPIError, snakeCasePath } from '../../src/api/client.js';
 
 function baseConfig(overrides: Partial<{ dryRun: boolean; readOnly: boolean }> = {}) {
   return {
@@ -78,7 +78,7 @@ describe('OPNSenseAPIClient fork: always read-only', () => {
     expect(mockAxiosInstance.post).not.toHaveBeenCalled();
     expect(mockAxiosInstance.get).toHaveBeenCalledTimes(1);
     expect(mockAxiosInstance.get.mock.calls[0][0]).toBe(
-      '/firewall/filter/searchRule?current=1&rowCount=1000&searchPhrase=dns'
+      '/firewall/filter/search_rule?current=1&rowCount=1000&searchPhrase=dns'
     );
   });
 });
@@ -112,5 +112,27 @@ describe('OPNSenseAPIClient read-only mode', () => {
   it('reports isReadOnly() as true', () => {
     const client = new OPNSenseAPIClient(baseConfig({ readOnly: true }));
     expect(client.isReadOnly()).toBe(true);
+  });
+});
+
+describe('snakeCasePath (fork)', () => {
+  it('converts camelCase actions so snake_case ACL patterns match', () => {
+    expect(snakeCasePath('/diagnostics/interface/getArp')).toBe('/diagnostics/interface/get_arp');
+    expect(snakeCasePath('/interfaces/vlan_settings/searchItem')).toBe('/interfaces/vlan_settings/search_item');
+    expect(snakeCasePath('/interfaces/overview/getInterface/vlan070')).toBe('/interfaces/overview/get_interface/vlan070');
+  });
+
+  it('leaves identifiers and the query string alone', () => {
+    expect(snakeCasePath('/firewall/filter/getRule/5a0b1c2d-0000-4000-8000-0123456789ab'))
+      .toBe('/firewall/filter/get_rule/5a0b1c2d-0000-4000-8000-0123456789ab');
+    expect(snakeCasePath('/interfaces/overview/interfacesInfo?rowCount=-1'))
+      .toBe('/interfaces/overview/interfaces_info?rowCount=-1');
+    expect(snakeCasePath('/core/system/status')).toBe('/core/system/status');
+  });
+
+  it('is applied to every GET', async () => {
+    const client = new OPNSenseAPIClient(baseConfig());
+    await client.get('/diagnostics/interface/getArp');
+    expect(mockAxiosInstance.get.mock.calls[0][0]).toBe('/diagnostics/interface/get_arp');
   });
 });

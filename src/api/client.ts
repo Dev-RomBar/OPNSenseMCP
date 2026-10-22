@@ -20,6 +20,21 @@ export class OPNSenseAPIError extends Error {
 }
 
 /**
+ * Fork: camelCase path segments to snake_case (getArp -> get_arp), query string untouched.
+ * Identifiers in paths (uuids, device names) are lowercase and pass through unchanged.
+ */
+export function snakeCasePath(path: string): string {
+  const [base, query] = path.split('?', 2);
+  const snake = base
+    .split('/')
+    .map(segment => /^[a-z][a-z0-9]*[A-Z][A-Za-z0-9]*$/.test(segment)
+      ? segment.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`)
+      : segment)
+    .join('/');
+  return query === undefined ? snake : `${snake}?${query}`;
+}
+
+/**
  * OPNsense API Client with comprehensive functionality and error handling
  */
 export class OPNSenseAPIClient {
@@ -272,6 +287,10 @@ export class OPNSenseAPIClient {
    * GET request - NO Content-Type header for OPNsense compatibility
    */
   async get<T = any>(path: string): Promise<T> {
+    // Fork: OPNsense routes camelCase and snake_case actions alike, but its ACL patterns are
+    // snake_case and matched against the raw URL. A least-privilege key gets 403 on
+    // /diagnostics/interface/getArp but not on get_arp, so always send snake_case.
+    path = snakeCasePath(path);
     const startTime = Date.now();
     const response = await this.axios.get(path, {
       headers: {

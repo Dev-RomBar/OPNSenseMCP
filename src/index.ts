@@ -1256,7 +1256,7 @@ class OPNSenseMCPServer {
           inputSchema: {
             type: 'object',
             properties: {
-              interfaceName: { type: 'string', description: 'Interface name (e.g., lan, wan, opt8)' }
+              interfaceName: { type: 'string', description: 'Interface device name (e.g., vlan070, igb0); see interface_list_overview' }
             },
             required: ['interfaceName']
           }

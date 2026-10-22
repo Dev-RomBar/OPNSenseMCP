@@ -65,6 +65,19 @@ export class InterfaceConfigResource {
       logger.debug('[InterfaceConfig] Getting interface overview');
     }
 
+    // Fork: current OPNsense (page-status-interfaces); the endpoints below are older.
+    try {
+      const response = await this.client.get('/interfaces/overview/interfacesInfo?rowCount=-1');
+      const result = this.parseInterfaceResponse(response);
+      if (result.length > 0) {
+        return result;
+      }
+    } catch (error) {
+      if (this.debugMode) {
+        logger.debug('[InterfaceConfig] interfaces_info failed, trying older endpoints');
+      }
+    }
+
     // Try primary endpoint first (works on older OPNsense versions)
     try {
       const response = await this.client.get('/interfaces/overview/list');
@@ -231,6 +244,19 @@ export class InterfaceConfigResource {
 
     try {
       // Try multiple endpoints
+      // Fork: getInterface (page-status-interfaces) takes the device name, e.g. vlan070.
+      try {
+        const response = await this.client.get(`/interfaces/overview/getInterface/${interfaceName}`);
+        if (response?.message && typeof response.message === 'object') {
+          this.interfaceCache.set(interfaceName, response.message);
+          return response.message;
+        }
+      } catch (error) {
+        if (this.debugMode) {
+          logger.debug('[InterfaceConfig] get_interface failed:', error);
+        }
+      }
+
       const endpoints = [
         `/interfaces/settings/get/${interfaceName}`,
         `/interfaces/${interfaceName}/get`,
