@@ -1,5 +1,8 @@
 # Dependabot configuration for automated dependency updates
 # https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+#
+# Fork: no upstream reviewer, a 7-day cooldown and the Docker base images. The
+# dependabot-reviewer agent (dev-rombar/devbox) reviews these pull requests.
 
 version: 2
 updates:
@@ -14,11 +17,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
-      timezone: "America/Chicago"
+      time: "08:00"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
-    reviewers:
-      - "vespo92"
     labels:
       - "dependencies"
       - "bun"
@@ -61,8 +63,26 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+      time: "08:00"
+    cooldown:
+      default-days: 7
     labels:
       - "dependencies"
       - "github-actions"
     commit-message:
       prefix: "chore(ci)"
+
+  # Docker base images (Dockerfile)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+    cooldown:
+      default-days: 7
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker)"
