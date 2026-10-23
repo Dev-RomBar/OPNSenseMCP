@@ -57,6 +57,30 @@ updates:
     # Only ignore packages with known compatibility issues
     ignore: []
 
+  # Bun dependencies of the dashboard. It has its own package.json, so it needs
+  # its own bun.lock: without one, Dependabot can't tell which versions are
+  # installed and its security updates fail.
+  - package-ecosystem: "bun"
+    directory: "/dashboard"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+    cooldown:
+      default-days: 7
+    labels:
+      - "dependencies"
+      - "bun"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      dashboard-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
